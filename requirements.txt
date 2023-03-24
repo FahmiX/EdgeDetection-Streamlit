@@ -1,0 +1,6 @@
+matplotlib
+Pillow
+opencv-python
+numpy
+pandas
+streamlit-option-menu
