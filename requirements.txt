@@ -1,7 +1,7 @@
+streamlit
 matplotlib
 Pillow
-opencv-python
+opencv-python-headless
 numpy
 pandas
 streamlit-option-menu
-opencv-python-headless
