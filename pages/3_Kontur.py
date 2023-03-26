@@ -77,4 +77,4 @@ else:
 st.markdown("""---""")
 st.markdown("""
 <h5 style='text-align: center; color: white;'>Copyright 
-<a href="https://google.com">Matsuhisa.Inc</a></h5>""", unsafe_allow_html=True)
+<a href="https://google.com">MadPilot.Inc</a></h5>""", unsafe_allow_html=True)
