@@ -1,209 +1,170 @@
-import numpy as np
 import streamlit as st
-import cv2 as cv
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
 
+def sobel_edge_detection(img):
+    # Cek apakah gambar grayscale atau bukan
+    if len(img.shape) == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Kernel
+    kernel_x = np.array([[-1, 0, 1],
+                         [-2, 0, 2],
+                        [-1, 0, 1]])
+
+    kernel_y = np.array([[-1, -2, -1],
+                       [0, 0, 0],
+                       [1, 2, 1]])
+    
+    # Operasi Sobel
+    img_x = cv2.filter2D(img, -1, kernel_x)
+    img_y = cv2.filter2D(img, -1, kernel_y)
+    img = cv2.add(img_x, img_y)
+
+    return img
+
+# Same as operator_sobel() but more sharp for any image
+def sobel_edge_detection2(img):
+    # Convert to grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Apply Sobel filter
+    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=5)
+    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=5)
+    
+    # Calculate gradient magnitude
+    mag = np.sqrt(sobelx**2 + sobely**2)
+    mag = np.uint8(mag)
+    
+    # Apply thresholding to obtain binary image
+    thresh = cv2.threshold(mag, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)[1]
+    
+    return thresh
+
+def freeman_chain_code(contour):
+    # Create dictionary for the directions
+    directions = {
+        (0, 1): 0,
+        (1, 1): 1,
+        (1, 0): 2,
+        (1, -1): 3,
+        (0, -1): 4,
+        (-1, -1): 5,
+        (-1, 0): 6,
+        (-1, 1): 7
+    }
+    
+    # Define the starting point and starting direction
+    current = contour[0][0]
+    prev_dir = 0
+    
+    # Iterate over the contour and calculate the chain code
+    chain_code = []
+    for i in range(1, len(contour)):
+        next_point = contour[i][0]
+        diff = tuple(np.subtract(next_point, current))
+        direction = directions.get(diff)
+        if direction is not None:
+            # Calculate the difference between the current and previous direction
+            diff_dir = direction - prev_dir
+            if diff_dir < 0:
+                diff_dir += 8
+            chain_code.append(diff_dir)
+            prev_dir = direction
+            current = next_point
+    
+    return chain_code
+
+def decode_freeman_chain_code(chain_code):
+    # Create dictionary for the directions
+    directions = {
+        0: (0, 1),
+        1: (1, 1),
+        2: (1, 0),
+        3: (1, -1),
+        4: (0, -1),
+        5: (-1, -1),
+        6: (-1, 0),
+        7: (-1, 1)
+    }
+    
+    # Define the starting point and starting direction
+    current = (0, 0)
+    prev_dir = 0
+    
+    # Iterate over the chain code and calculate the contour
+    contour = []
+    for i in range(len(chain_code)):
+        # Calculate the current direction
+        direction = (prev_dir + chain_code[i]) % 8
+        diff = directions.get(direction)
+        if diff is not None:
+            # Calculate the next point
+            next_point = tuple(np.add(current, diff))
+            contour.append(next_point)
+            prev_dir = direction
+            current = next_point
+    
+    return np.array(contour)
 
 # Title
-st.title("Kontur Detection")
+st.title("Freeman Chain Code & Decoding")
 st.markdown("""---""")
 
 # Upload Image
-img = st.file_uploader("Upload Citra", type=["png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
-
-# Fungsi untuk menampilkan citra dengan Streamlit
-def show_image(img):
-    img_rgb = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-    st.image(img_rgb)
-
-
-def freeman_chain_code(contours, i):
-    codes = []
-    for j in range(len(contours[i])):
-        if j == len(contours[i])-1:
-            break
-        else:
-            x1 = contours[i][j][0][0]
-            y1 = contours[i][j][0][1]
-            x2 = contours[i][j+1][0][0]
-            y2 = contours[i][j+1][0][1]
-            if x1 == x2 and y1 < y2:
-                codes.append("0")
-            elif x1 < x2 and y1 < y2:
-                codes.append("1")
-            elif x1 < x2 and y1 == y2:
-                codes.append("2")
-            elif x1 < x2 and y1 > y2:
-                codes.append("3")
-            elif x1 == x2 and y1 > y2:
-                codes.append("4")
-            elif x1 > x2 and y1 > y2:
-                codes.append("5")
-            elif x1 > x2 and y1 == y2:
-                codes.append("6")
-            elif x1 > x2 and y1 < y2:
-                codes.append("7")
-            else:
-                codes.append("error")
-    return codes
-
-# Fungsi untuk mendekode Freeman Chain Code
-
-
-def decode_freeman_chain_code(code, start_point, img_shape):
-    x, y = start_point
-    chain_code = [int(c) for c in code]
-    points = [(x, y)]
-
-    # Calculate image center
-    center_x = int(img_shape[1] / 2)
-    center_y = int(img_shape[0] / 2)
-
-    for i, c in enumerate(chain_code):
-        if i >= len(code):
-            break
-        if c == 0:
-            y += 1
-        elif c == 1:
-            x += 1
-            y += 1
-        elif c == 2:
-            x += 1
-        elif c == 3:
-            x += 1
-            y -= 1
-        elif c == 4:
-            y -= 1
-        elif c == 5:
-            x -= 1
-            y -= 1
-        elif c == 6:
-            x -= 1
-        elif c == 7:
-            x -= 1
-            y += 1
-
-        # Check if point is out of bounds
-        if x < 0:
-            x = 0
-        elif x >= img_shape[1]:
-            x = img_shape[1] - 1
-
-        if y < 0:
-            y = 0
-        elif y >= img_shape[0]:
-            y = img_shape[0] - 1
-
-        points.append((x, y))
-
-    # Calculate offset from center to start point
-    offset_x = center_x - start_point[0]
-    offset_y = center_y - start_point[1]
-
-    # Shift all points by the offset
-    shifted_points = []
-    for point in points:
-        x = point[0] + offset_x
-        y = point[1] + offset_y
-        shifted_points.append((x, y))
-
-    return shifted_points
-
-
-if img is not None:
-    img = np.frombuffer(img.read(), np.uint8)
-    img = cv.imdecode(img, cv.IMREAD_COLOR)
-    img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-
+if uploaded_file is not None:
     # Deklarasi Array
     tab1, tab2, tab3 = st.tabs(
-        ["Citra Asli", "Deteksi Kontur (Image)", "Freeman Chain Code"])
+        ["Transformasi", "Freeman Chain Code", "Decoding"])
+
+    # Load the image and perform edge detection
+    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+    img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+    edges = sobel_edge_detection(img)
     
-    # Konversi Grayscale
-    imgray = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
+    # Find the contours and draw them on the image
+    contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    img_contours = np.zeros(img.shape, dtype=np.uint8)
+    cv2.drawContours(img_contours, contours, -1, (0, 255, 0), 2)
 
-
-    kernel = np.ones((3, 3), np.uint8)
-
-    # Konversi Grayscale
-    imgray = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-
-# Konversi Biner
-    ret, imgbin = cv.threshold(imgray, 127, 255, 0)
-
-# Dilasi
-    imgdil = cv.dilate(imgbin, kernel, iterations=1)
-
-# Erosi
-    imgero = cv.erode(imgdil, kernel, iterations=1)
-
-# Deteksi Kontur
-    contours, hierarchy = cv.findContours(
-    imgero, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-
-    code = freeman_chain_code(contours, 1)
-    start_point = tuple(contours[1][0][0])
-    decoded_points = decode_freeman_chain_code(code, start_point, img.shape)
-
-     # Tab 1 - Citra Asli
     with tab1:
-        # Citra Asli
-        st.markdown(
-            "<h4 style='text-align: center; color: white;'>Citra Asli</h3>", unsafe_allow_html=True)
-        st.image(img, use_column_width=True)
+        # Display the original image, sobel, and the contours image side by side
+        fig, ax = plt.subplots(1, 3, figsize=(15, 15))
+        ax[0].imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        ax[0].set_title("Original Image")
+        ax[1].imshow(edges, cmap="gray")
+        ax[1].set_title("Sobel Edge Detection")
+        ax[2].imshow(cv2.cvtColor(img_contours, cv2.COLOR_BGR2RGB))
+        ax[2].set_title("Contours")
+        st.pyplot(fig)
 
-        # Array Citra Asli
-        st.markdown(
-            "<h4 style='text-align: center; color: white;'> Array Citra Asli</h4>", unsafe_allow_html=True)
-        r, g, b = cv.split(img)
-        with st.expander("RGB Channel"):
-            st.write("Red Channel")
-            st.write(r)
-            st.write("Green Channel")
-            st.write(g)
-            st.write("Blue Channel")
-            st.write(b)
-
-    # Tab 2 - Deteksi Kontur (Image)
     with tab2:
-        # Citra Biner
-        st.markdown(
-            "<h4 style='text-align: center; color: white;'>Citra Biner</h4>", unsafe_allow_html=True)
-        st.image(imgbin, use_column_width=True)
+        # otomatis pilih contour terbesar
+        if len(contours) > 0:
+            selected_contour = np.argmax([len(c) for c in contours])        
+        else:
+            selected_contour = None
+        
+        # jika selected_contour null maka tidak akan dijalankan
+        if selected_contour is not None:
+            contour = contours[selected_contour]
 
-        # Citra Kontur
-        st.markdown(
-            "<h4 style='text-align: center; color: white;'>Citra Kontur</h4>", unsafe_allow_html=True)
-        img_result = cv.drawContours(img, contours, 1, (0, 255, 0), 3)
-        st.image(img_result, use_column_width=True)
+            # Calculate the Freeman Chain Code for the contour
+            chain_code = freeman_chain_code(contour)
 
-    # Tab 3 - Freeman Chain Code
+            # Display the chain code as a string
+            st.write("Chain Code:")
+            st.write("".join([str(c) for c in chain_code]))
+
     with tab3:
-        # Freeman Chain Code
-        st.markdown(
-            "<h4 style='text-align: center; color: white;'>Freeman Chain Code</h4>", unsafe_allow_html=True)
-        # print as string
-        st.write("".join(code))
-    
-
-        # Dekode Freeman Chain Code
-        st.markdown(
-            "<h4 style='text-align: center; color: white;'>Dekode Freeman Chain Code</h4>", unsafe_allow_html=True)
-            # Dekode Freeman Chain Code dan tampilkan citra hasil decode
-
-
-        # Mendekode Freeman Chain Code dan menampilkan citra hasil decode
-        decoded_img = np.zeros_like(img)
-
-        decoded_contours = np.array([decoded_points], dtype=np.int32)
-        decoded_img = cv.drawContours(decoded_img, decoded_contours, -1, (0, 255, 0), 3)
-        st.image(decoded_img, use_column_width=True)
+        # Decode the chain code and display the contour
+        st.write("Decoded Contour:")
+        decoded_contour = decode_freeman_chain_code(chain_code)
+        img_decoded_contour = np.zeros(img.shape, dtype=np.uint8)
+        cv2.drawContours(img_decoded_contour, [decoded_contour], -1, (0, 0, 255), 2)
+        st.image(img_decoded_contour, caption="Decoded Contour")
 else:
-    st.markdown("<h4 style='text-align: center; color: white;'>Silahkan Upload Citra</h4>",
-                unsafe_allow_html=True)
-
-# Footer
-st.markdown("""---""")
-st.markdown("""
-<h5 style='text-align: center; color: white;'>Copyright 
-<a href="https://google.com">Matsuhisa.Inc</a></h5>""", unsafe_allow_html=True)
+    st.warning("Silahkan upload gambar terlebih dahulu")
