@@ -2,28 +2,52 @@
 import streamlit as st
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
+import pandas as pd
 
 # Function
+# Show Image
+def show_image(image, title="", type=""):
+    # Set the size of the figure
+    fig, ax = plt.subplots(figsize=(5, 5))
+    
+    # Show the image
+    ax.imshow(image, cmap=type)
+    
+    # Set the title and turn off the axis
+    ax.set_title(title)
+    ax.axis("off")
+    
+    # Display the plot using Streamlit
+    st.pyplot(fig)
+
+# Save Array to Excel
+def save_to_excel(array, filename):
+    # Convert the Sobel array to a DataFrame
+    df = pd.DataFrame(array)
+    # Create a Pandas Excel writer using XlsxWriter as the engine
+    writer = pd.ExcelWriter(filename, engine='xlsxwriter')
+    # Write the DataFrame to a sheet named 'Sheet1'
+    df.to_excel(writer, sheet_name='Sheet1')
+    # Close the Pandas Excel writer and output the Excel file
+    writer.save()
+
+# Operator Sobel 
 def operator_sobel(img):
     # Cek apakah gambar grayscale atau bukan
     if len(img.shape) == 3:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # Kernel
-    kernel_x = np.array([[-1, 0, 1],
-                         [-2, 0, 2],
-                        [-1, 0, 1]])
-
-    kernel_y = np.array([[-1, -2, -1],
-                       [0, 0, 0],
-                       [1, 2, 1]])
     
-    # Operasi Sobel
-    img_x = cv2.filter2D(img, -1, kernel_x)
-    img_y = cv2.filter2D(img, -1, kernel_y)
-    img = cv2.add(img_x, img_y)
+    # aplikasikan operator sobel pada gambar
+    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
+    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
 
-    return img
+    # gabungkan hasil sobelx dan sobely
+    sobel_img = np.sqrt(np.power(sobelx, 2) + np.power(sobely, 2))
+    sobel_img = np.round(sobel_img)
+    sobel_img = np.clip(sobel_img, 0, 255)
+    
+    return sobel_img, sobelx, sobely
 
 # Title 
 st.title("Operator Sobel")
@@ -44,13 +68,14 @@ if img is not None:
     gray_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
     # Operasi Sobel
-    sobel_img = operator_sobel(gray_img)
+    sobel_img, sobelx_img, sobely_img = operator_sobel(gray_img)
 
     # Tab 1 - Citra Asli
     with tab1:
         # Citra Asli
         st.markdown("<h4 style='text-align: center; color: white;'>Citra Asli</h4>", unsafe_allow_html=True)
-        st.image(img, use_column_width=True)
+        # st.image(img, use_column_width=False)
+        show_image(img, "Citra Asli", "gray")
 
         # Array Citra Asli
         st.markdown("<h4 style='text-align: center; color: white;'>Array Citra Asli</h4>", unsafe_allow_html=True)
@@ -67,11 +92,19 @@ if img is not None:
     with tab2:
         # Citra Grayscale
         st.markdown("<h4 style='text-align: center; color: white;'>Citra Grayscale</h4>", unsafe_allow_html=True)
-        st.image(gray_img, use_column_width=True)
+        show_image(gray_img, "Citra Grayscale", "gray")
 
-        # Citra Hasil
-        st.markdown("<h4 style='text-align: center; color: white;'>Citra Hasil</h4>", unsafe_allow_html=True)
-        st.image(sobel_img, use_column_width=True)
+        # Citra Hasil Operator Sobel X
+        st.markdown("<h4 style='text-align: center; color: white;'>Citra Hasil Operator Sobel X</h4>", unsafe_allow_html=True)
+        show_image(sobelx_img, "Citra Hasil Operator Sobel X", "gray")
+
+        # Citra Hasil Operator Sobel Y
+        st.markdown("<h4 style='text-align: center; color: white;'>Citra Hasil Operator Sobel Y</h4>", unsafe_allow_html=True)
+        show_image(sobely_img, "Citra Hasil Operator Sobel Y", "gray")
+
+        # Citra Hasil Operator Sobel
+        st.markdown("<h4 style='text-align: center; color: white;'>Citra Hasil Operator Sobel</h4>", unsafe_allow_html=True)
+        show_image(sobel_img, "Citra Hasil", "gray")
 
     # Tab 3 - Operasi Sobel (Array)
     with tab3:
@@ -79,9 +112,33 @@ if img is not None:
         st.markdown("<h4 style='text-align: center; color: white;'>Array Citra Grayscale</h4>", unsafe_allow_html=True)
         st.write(gray_img)
 
-        # Array Citra Hasil
-        st.markdown("<h4 style='text-align: center; color: white;'>Array Citra Hasil</h4>", unsafe_allow_html=True)
+        if st.button("Save Grayscale to Excel"):
+            save_to_excel(gray_img, 'grayscale_output.xlsx')
+            st.success("Grayscale image saved to grayscale_output.xlsx")
+
+        # Array Citra Hasil Operator Sobel X
+        st.markdown("<h4 style='text-align: center; color: white;'>Array Citra Hasil Operator Sobel X</h4>", unsafe_allow_html=True)
+        st.write(sobelx_img)
+
+        if st.button("Save Sobel X to Excel"):
+            save_to_excel(sobelx_img, 'sobelx_output.xlsx')
+            st.success("Sobel X image saved to sobelx_output.xlsx")
+
+        # Array Citra Hasil Operator Sobel Y
+        st.markdown("<h4 style='text-align: center; color: white;'>Array Citra Hasil Operator Sobel Y</h4>", unsafe_allow_html=True)
+        st.write(sobely_img)
+
+        if st.button("Save Sobel Y to Excel"):
+            save_to_excel(sobely_img, 'sobely_output.xlsx')
+            st.success("Sobel Y image saved to sobely_output.xlsx")
+
+        # Array Citra Hasil Operator Sobel
+        st.markdown("<h4 style='text-align: center; color: white;'>Array Citra Hasil Operator Sobel</h4>", unsafe_allow_html=True)
         st.write(sobel_img)
+
+        if st.button("Save Sobel to Excel"):
+            save_to_excel(sobel_img, 'sobel_output.xlsx')
+            st.success("Sobel image saved to sobel_output.xlsx")
 
 else:
     st.markdown("<h4 style='text-align: center; color: white;'>Upload An Image</h4>", unsafe_allow_html=True)
@@ -90,5 +147,5 @@ else:
 st.markdown("""---""")
 st.markdown("""
 <h5 style='text-align: center; color: white;'>Copyright 
-<a href="https://google.com">Matsuhisa.Inc</a></h5>""", unsafe_allow_html=True)
+<a href="https://google.com">MadPilot.Inc</a></h5>""", unsafe_allow_html=True)
 
